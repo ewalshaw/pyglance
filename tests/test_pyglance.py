@@ -67,6 +67,157 @@ def test_fixme_comment(tmp_path: Path) -> None:
     assert findings == ['FIXME a.py:1 - FIXME found: "handle empty input"']
 
 
+def test_dead_code_after_return(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text("def f():\n    return 1\n    x = 1\n", encoding="utf-8")
+    findings = analyze(tmp_path)
+    assert findings == ["DEAD_CODE a.py:3 - unreachable code"]
+
+
+def test_dead_code_after_raise(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text(
+        "def f():\n    raise ValueError\n    x = 1\n", encoding="utf-8"
+    )
+    findings = analyze(tmp_path)
+    assert findings == ["DEAD_CODE a.py:3 - unreachable code"]
+
+
+def test_dead_code_after_break(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text(
+        "def f():\n    for x in (1,):\n        break\n        y = 1\n", encoding="utf-8"
+    )
+    findings = analyze(tmp_path)
+    assert findings == ["DEAD_CODE a.py:4 - unreachable code"]
+
+
+def test_dead_code_after_continue(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text(
+        "def f():\n    for x in (1,):\n        continue\n        y = 1\n", encoding="utf-8"
+    )
+    findings = analyze(tmp_path)
+    assert findings == ["DEAD_CODE a.py:4 - unreachable code"]
+
+
+def test_dead_code_reports_first_only(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text(
+        "def f():\n    return 1\n    x = 1\n    y = 2\n", encoding="utf-8"
+    )
+    findings = analyze(tmp_path)
+    assert findings == ["DEAD_CODE a.py:3 - unreachable code"]
+
+
+def test_reachable_return_is_quiet(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+    assert analyze(tmp_path) == []
+
+
+def test_dead_code_in_if_body(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text(
+        "def f(x):\n"
+        "    if x:\n"
+        "        return 1\n"
+        "        y = 1\n"
+        "    z = 1\n",
+        encoding="utf-8",
+    )
+    findings = analyze(tmp_path)
+    assert findings == ["DEAD_CODE a.py:4 - unreachable code"]
+
+
+def test_dead_code_after_if_else(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text(
+        "def f(x):\n"
+        "    if x:\n"
+        "        return 1\n"
+        "    else:\n"
+        "        return 2\n"
+        "    z = 1\n",
+        encoding="utf-8",
+    )
+    findings = analyze(tmp_path)
+    assert findings == ["DEAD_CODE a.py:6 - unreachable code"]
+
+
+def test_dead_code_after_if_elif_else(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text(
+        "def f(x):\n"
+        "    if x == 1:\n"
+        "        return 1\n"
+        "    elif x == 2:\n"
+        "        return 2\n"
+        "    else:\n"
+        "        return 3\n"
+        "    z = 1\n",
+        encoding="utf-8",
+    )
+    findings = analyze(tmp_path)
+    assert findings == ["DEAD_CODE a.py:8 - unreachable code"]
+
+
+def test_elif_without_return_is_quiet(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text(
+        "def f(x):\n"
+        "    if x == 1:\n"
+        "        return 1\n"
+        "    elif x == 2:\n"
+        "        y = 1\n"
+        "    else:\n"
+        "        return 3\n"
+        "    z = 1\n",
+        encoding="utf-8",
+    )
+    assert analyze(tmp_path) == []
+
+
+def test_if_returns_else_does_not_is_quiet(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text(
+        "def f(x):\n"
+        "    if x:\n"
+        "        return 1\n"
+        "    else:\n"
+        "        y = 1\n"
+        "    z = 1\n",
+        encoding="utf-8",
+    )
+    assert analyze(tmp_path) == []
+
+
+def test_if_returns_without_else_is_quiet(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text(
+        "def f(x):\n"
+        "    if x:\n"
+        "        return 1\n"
+        "    z = 1\n",
+        encoding="utf-8",
+    )
+    assert analyze(tmp_path) == []
+
+
+def test_else_returns_if_does_not_is_quiet(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text(
+        "def f(x):\n"
+        "    if x:\n"
+        "        y = 1\n"
+        "    else:\n"
+        "        return 2\n"
+        "    z = 1\n",
+        encoding="utf-8",
+    )
+    assert analyze(tmp_path) == []
+
+
+def test_if_else_neither_returns_is_quiet(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text(
+        "def f(x):\n"
+        "    if x:\n"
+        "        y = 1\n"
+        "    else:\n"
+        "        z = 1\n"
+        "    w = 1\n",
+        encoding="utf-8",
+    )
+    assert analyze(tmp_path) == []
+
+
 def test_circular_import(tmp_path: Path) -> None:
     (tmp_path / "a.py").write_text("import b\n\ndef ping():\n    return b.pong\n", encoding="utf-8")
     (tmp_path / "b.py").write_text("import a\n\ndef pong():\n    return a.ping\n", encoding="utf-8")

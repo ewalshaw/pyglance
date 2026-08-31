@@ -1,7 +1,7 @@
 # Design
 
 pyglance walks `.py` files, parses each with the stdlib `ast` module, and
-runs four checks.
+runs five checks.
 
 ## Unused imports and long functions
 
@@ -13,6 +13,17 @@ including blank lines and comments inside the function.
 
 Comment tokens come from `tokenize`, not the AST, so markers inside strings
 are ignored.
+
+## Dead code
+
+The first statement after a terminator in the same block is reported as
+unreachable. Terminators are `return`, `raise`, `break`, `continue`, and
+an `if`/`elif`/`else` whose every branch terminates (`elif` is a nested
+`If` in `orelse`, so the same both-sides check covers the chain). An
+`if` with no `else` never ends the following code.
+
+Nested bodies (`if`, loops, `try`, functions, `match`) are still walked
+for inner dead statements. 
 
 ## Circular imports
 
