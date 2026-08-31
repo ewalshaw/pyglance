@@ -13,6 +13,8 @@ _UNUSED_IMPORT = 0
 _LONG_FUNCTION = 1
 _TODO = 2
 _CIRCULAR_IMPORT = 3
+_DEAD_CODE = 4
+_TERMINATORS = (ast.Return, ast.Raise, ast.Break, ast.Continue)
 
 
 def _imports(tree: ast.AST, mod: str, path: Path, modules: dict[str, Path]):
@@ -74,6 +76,44 @@ def _cycles(graph: dict[Path, dict[Path, int]], root: Path):
     return [cycles[key] for key in sorted(cycles)]
 
 
+def _stmt_terminates(stmt) -> bool:
+    if isinstance(stmt, _TERMINATORS):
+        return True
+    if isinstance(stmt, ast.If) and stmt.orelse:
+        return _body_terminates(stmt.body) and _body_terminates(stmt.orelse)
+    return False
+
+
+def _body_terminates(body) -> bool:
+    return any(_stmt_terminates(stmt) for stmt in body)
+
+
+def _dead_in(body, shown, found):
+    ended = False
+    for stmt in body:
+        if ended:
+            found.append((_DEAD_CODE, shown, stmt.lineno,
+                          f"DEAD_CODE {shown}:{stmt.lineno} - unreachable code"))
+            break
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
+                             ast.With, ast.AsyncWith)):
+            _dead_in(stmt.body, shown, found)
+        elif isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While)):
+            _dead_in(stmt.body, shown, found)
+            _dead_in(stmt.orelse, shown, found)
+        elif isinstance(stmt, (ast.Try, ast.TryStar)):
+            _dead_in(stmt.body, shown, found)
+            for handler in stmt.handlers:
+                _dead_in(handler.body, shown, found)
+            _dead_in(stmt.orelse, shown, found)
+            _dead_in(stmt.finalbody, shown, found)
+        elif isinstance(stmt, ast.Match):
+            for case in stmt.cases:
+                _dead_in(case.body, shown, found)
+        if _stmt_terminates(stmt):
+            ended = True
+
+
 def _file_findings(path: Path, source: str, tree: ast.AST, root: Path):
     shown = display_path(path, root)
     found = []
@@ -107,6 +147,8 @@ def _file_findings(path: Path, source: str, tree: ast.AST, root: Path):
                 found.append((_LONG_FUNCTION, shown, node.lineno,
                               f"LONG_FUNCTION {shown}:{node.lineno}"
                               f" - function '{node.name}' is {length} lines long"))
+
+    _dead_in(tree.body, shown, found)
 
     for token in tokenize.generate_tokens(io.StringIO(source).readline):
         if token.type != tokenize.COMMENT:
