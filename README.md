@@ -25,8 +25,8 @@ cd path/to/pyglance
 python -m pip install .
 ```
 
-If `pyglance` is not recognized, add the Scripts directory reported by pip
-to your `PATH`, then open a new terminal.
+If `pyglance` is not recognized, add the scripts directory reported by pip
+to your `PATH` (this is the `Scripts` folder on Windows, or `bin` on macOS/Linux), then open a new terminal.
 
 3. Analyze the current directory:
 
