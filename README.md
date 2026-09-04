@@ -4,13 +4,13 @@ pyglance is a small, dependency-free static analyzer for Python code.
 
 It reports:
 
-- unused imports
-- functions longer than 50 lines
-- TODO and FIXME comments
-- circular imports between local files
-- unreachable code after `return`, `raise`, `break`, `continue`, or an `if`/`elif`/`else` where every branch returns
+- unused imports (`UNUSED_IMPORT`)
+- functions longer than 50 lines (`LONG_FUNCTION`)
+- TODO and FIXME comments (`TODO`)
+- circular imports between local files (`CIRCULAR_IMPORT`)
+- unreachable code after `return`, `raise`, `break`, `continue`, or an `if`/`elif`/`else` where every branch returns (`DEAD_CODE`)
 
-Requires Python 3.11 or newer. 
+Requires Python 3.11 or newer.
 
 ## Setup
 
@@ -62,6 +62,14 @@ DEAD_CODE dead.py:3 - unreachable code
 
 Findings are written to standard output in a deterministic order. The process
 exits with status 1 if anything was reported. Pass `--exit-zero` to always exit 0.
+
+Limit which checks run with `--select` / `--ignore` (comma-separated ids).
+`--ignore` is applied after `--select`. Example:
+
+```text
+pyglance --select UNUSED_IMPORT,DEAD_CODE
+pyglance --ignore TODO,LONG_FUNCTION
+```
 
 A file with a syntax error is skipped (the message goes to stderr) and the
 rest of the tree is still checked.

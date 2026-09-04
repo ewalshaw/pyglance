@@ -16,6 +16,21 @@ _CIRCULAR_IMPORT = 3
 _DEAD_CODE = 4
 _TERMINATORS = (ast.Return, ast.Raise, ast.Break, ast.Continue)
 
+ALL_CHECKS = frozenset({
+    "UNUSED_IMPORT",
+    "LONG_FUNCTION",
+    "TODO",
+    "CIRCULAR_IMPORT",
+    "DEAD_CODE",
+})
+_KIND_TO_CHECK = {
+    _UNUSED_IMPORT: "UNUSED_IMPORT",
+    _LONG_FUNCTION: "LONG_FUNCTION",
+    _TODO: "TODO",
+    _CIRCULAR_IMPORT: "CIRCULAR_IMPORT",
+    _DEAD_CODE: "DEAD_CODE",
+}
+
 
 def _imports(tree: ast.AST, mod: str, path: Path, modules: dict[str, Path]):
     found = []
@@ -164,8 +179,12 @@ def _file_findings(path: Path, source: str, tree: ast.AST, root: Path):
     return found
 
 
-def analyze(target: Path) -> list[str]:
-    """Return issue lines for Python files under target."""
+def analyze(target: Path, checks: frozenset[str] | None = None) -> list[str]:
+    """Return issue lines for Python files under target.
+
+    checks selects which rule ids to run. None means all checks.
+    """
+    active = ALL_CHECKS if checks is None else checks
     files = find_files(target)
     root = target.parent if target.is_file() else target
     parsed = {}
@@ -184,27 +203,30 @@ def analyze(target: Path) -> list[str]:
 
     ok = list(parsed)
     for path in sorted(ok, key=shown):
-        findings.extend(_file_findings(path, *parsed[path], root))
+        for item in _file_findings(path, *parsed[path], root):
+            if _KIND_TO_CHECK[item[0]] in active:
+                findings.append(item)
 
-    modules = {module_name(path, root): path for path in ok}
-    if (root / "__init__.py").is_file():
-        modules.update({
-            ".".join(p for p in (root.name, name) if p): path
-            for name, path in list(modules.items())
-        })
+    if "CIRCULAR_IMPORT" in active:
+        modules = {module_name(path, root): path for path in ok}
+        if (root / "__init__.py").is_file():
+            modules.update({
+                ".".join(p for p in (root.name, name) if p): path
+                for name, path in list(modules.items())
+            })
 
-    graph = {path: {} for path in ok}
-    canonical = {path: module_name(path, root) for path in ok}
-    for path in ok:
-        for imported, line in _imports(parsed[path][1], canonical[path], path, modules):
-            previous = graph[path].get(imported)
-            graph[path][imported] = line if previous is None else min(previous, line)
-        graph[path] = dict(sorted(graph[path].items(), key=lambda item: shown(item[0])))
+        graph = {path: {} for path in ok}
+        canonical = {path: module_name(path, root) for path in ok}
+        for path in ok:
+            for imported, line in _imports(parsed[path][1], canonical[path], path, modules):
+                previous = graph[path].get(imported)
+                graph[path][imported] = line if previous is None else min(previous, line)
+            graph[path] = dict(sorted(graph[path].items(), key=lambda item: shown(item[0])))
 
-    for nodes, lines in _cycles(graph, root):
-        parts = [f"{shown(path)}:{line}" for path, line in zip(nodes, lines)]
-        parts.append(parts[0])
-        findings.append((_CIRCULAR_IMPORT, shown(nodes[0]), lines[0],
-                         f"CIRCULAR_IMPORT {' -> '.join(parts)}"))
+        for nodes, lines in _cycles(graph, root):
+            parts = [f"{shown(path)}:{line}" for path, line in zip(nodes, lines)]
+            parts.append(parts[0])
+            findings.append((_CIRCULAR_IMPORT, shown(nodes[0]), lines[0],
+                             f"CIRCULAR_IMPORT {' -> '.join(parts)}"))
 
     return [text for _, _, _, text in sorted(findings)]

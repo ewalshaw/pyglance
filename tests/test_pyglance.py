@@ -275,6 +275,63 @@ def test_exit_codes(tmp_path: Path, monkeypatch) -> None:
     assert main() == 0
 
 
+def test_select_one_check(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text(
+        "import os\n# TODO: later\nx = 1\n", encoding="utf-8"
+    )
+    findings = analyze(tmp_path, checks=frozenset({"UNUSED_IMPORT"}))
+    assert findings == ["UNUSED_IMPORT a.py:1 - 'os' imported but not used"]
+
+
+def test_ignore_one_check(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text(
+        "import os\n# TODO: later\nx = 1\n", encoding="utf-8"
+    )
+    findings = analyze(tmp_path, checks=frozenset({"TODO"}))
+    assert findings == ['TODO a.py:2 - TODO found: "later"']
+
+
+def test_select_and_ignore(tmp_path: Path, monkeypatch, capsys) -> None:
+    (tmp_path / "a.py").write_text(
+        "import os\n# TODO: later\ndef f():\n    return 1\n    x = 1\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "pyglance",
+            "--select",
+            "UNUSED_IMPORT,TODO,DEAD_CODE",
+            "--ignore",
+            "TODO",
+            str(tmp_path),
+        ],
+    )
+    assert main() == 1
+    out = capsys.readouterr().out
+    assert "UNUSED_IMPORT" in out
+    assert "DEAD_CODE" in out
+    assert "TODO" not in out
+
+
+def test_ignore_circular_import_skips_cycles(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text("import b\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text("import a\n", encoding="utf-8")
+    assert analyze(tmp_path, checks=frozenset({"DEAD_CODE"})) == []
+
+
+def test_unknown_check_exits(tmp_path: Path, monkeypatch, capsys) -> None:
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        sys, "argv", ["pyglance", "--select", "NOT_A_CHECK", str(tmp_path)]
+    )
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    assert "unknown check id" in capsys.readouterr().err
+
+
 def test_missing_path_exits(tmp_path: Path, monkeypatch, capsys) -> None:
     missing = tmp_path / "does-not-exist"
     monkeypatch.setattr(sys, "argv", ["pyglance", str(missing)])
