@@ -1,7 +1,8 @@
 # Design
 
 pyglance walks `.py` files, parses each with the stdlib `ast` module, and
-runs five checks.
+runs five checks. CLI `--select` / `--ignore` narrow that set; `TODO` covers
+both TODO and FIXME comments.
 
 ## Unused imports and long functions
 
@@ -23,14 +24,15 @@ an `if`/`elif`/`else` whose every branch terminates (`elif` is a nested
 `if` with no `else` never ends the following code.
 
 Nested bodies (`if`, loops, `try`, functions, `match`) are still walked
-for inner dead statements. 
+for inner dead statements.
 
 ## Circular imports
 
 Local imports become a directed graph of files. Cycles are found with DFS
 from each node. The reported cycle is rotated so the lexicographically
 smallest path comes first, which keeps output stable when the same loop is
-found from different starts.
+found from different starts. The graph is built only when `CIRCULAR_IMPORT`
+is active.
 
 DFS is enough for small projects. Strongly connected components (for example
 Tarjan) would scale better on a dense import graph.
