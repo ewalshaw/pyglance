@@ -5,7 +5,7 @@ pyglance is a small, dependency-free static analyzer for Python code.
 It reports:
 
 - unused imports (`UNUSED_IMPORT`)
-- functions longer than 50 lines (`LONG_FUNCTION`)
+- functions longer than 50 lines (`LONG_FUNCTION`; override with `--max-function-lines`)
 - TODO and FIXME comments (`TODO`)
 - circular imports between local files (`CIRCULAR_IMPORT`)
 - unreachable code after `return`, `raise`, `break`, `continue`, or an `if`/`elif`/`else` where every branch returns (`DEAD_CODE`)
@@ -69,6 +69,12 @@ Limit which checks run with `--select` / `--ignore` (comma-separated ids).
 ```text
 pyglance --select UNUSED_IMPORT,DEAD_CODE
 pyglance --ignore TODO,LONG_FUNCTION
+```
+
+Set the long-function threshold with `--max-function-lines N` (default: 50):
+
+```text
+pyglance --max-function-lines 100
 ```
 
 A file with a syntax error is skipped (the message goes to stderr) and the

@@ -1,13 +1,23 @@
 import argparse
 from pathlib import Path
 
-from .analyzer import ALL_CHECKS, analyze
+from .analyzer import ALL_CHECKS, DEFAULT_MAX_FUNCTION_LINES, analyze
 
 _CHECK_HELP = ", ".join(sorted(ALL_CHECKS))
 
 
 def _parse_checks(value: str) -> list[str]:
     return [part.strip().upper() for part in value.split(",") if part.strip()]
+
+
+def _positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid int value: {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
 
 
 def _resolve_checks(
@@ -49,6 +59,13 @@ def main() -> int:
         metavar="IDS",
         help="comma-separated check ids to skip (applied after --select)",
     )
+    parser.add_argument(
+        "--max-function-lines",
+        metavar="N",
+        type=_positive_int,
+        default=DEFAULT_MAX_FUNCTION_LINES,
+        help=f"report functions longer than N lines (default: {DEFAULT_MAX_FUNCTION_LINES})",
+    )
     parser.add_argument("--exit-zero", action="store_true",
                         help="exit 0 even when findings are reported")
     args = parser.parse_args()
@@ -60,7 +77,11 @@ def main() -> int:
     checks = _resolve_checks(parser, args.select, args.ignore)
 
     try:
-        findings = analyze(path, checks=checks)
+        findings = analyze(
+            path,
+            checks=checks,
+            max_function_lines=args.max_function_lines,
+        )
     except (OSError, SyntaxError, UnicodeError) as exc:
         parser.error(str(exc))
 

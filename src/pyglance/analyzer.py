@@ -23,6 +23,7 @@ ALL_CHECKS = frozenset({
     "CIRCULAR_IMPORT",
     "DEAD_CODE",
 })
+DEFAULT_MAX_FUNCTION_LINES = 50
 _KIND_TO_CHECK = {
     _UNUSED_IMPORT: "UNUSED_IMPORT",
     _LONG_FUNCTION: "LONG_FUNCTION",
@@ -129,7 +130,13 @@ def _dead_in(body, shown, found):
             ended = True
 
 
-def _file_findings(path: Path, source: str, tree: ast.AST, root: Path):
+def _file_findings(
+    path: Path,
+    source: str,
+    tree: ast.AST,
+    root: Path,
+    max_function_lines: int = DEFAULT_MAX_FUNCTION_LINES,
+):
     shown = display_path(path, root)
     found = []
     used = {
@@ -158,7 +165,7 @@ def _file_findings(path: Path, source: str, tree: ast.AST, root: Path):
 
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             length = node.end_lineno - node.lineno + 1
-            if length > 50:
+            if length > max_function_lines:
                 found.append((_LONG_FUNCTION, shown, node.lineno,
                               f"LONG_FUNCTION {shown}:{node.lineno}"
                               f" - function '{node.name}' is {length} lines long"))
@@ -179,7 +186,11 @@ def _file_findings(path: Path, source: str, tree: ast.AST, root: Path):
     return found
 
 
-def analyze(target: Path, checks: frozenset[str] | None = None) -> list[str]:
+def analyze(
+    target: Path,
+    checks: frozenset[str] | None = None,
+    max_function_lines: int = DEFAULT_MAX_FUNCTION_LINES,
+) -> list[str]:
     """Return issue lines for Python files under target.
 
     checks selects which rule ids to run. None means all checks.
@@ -203,7 +214,9 @@ def analyze(target: Path, checks: frozenset[str] | None = None) -> list[str]:
 
     ok = list(parsed)
     for path in sorted(ok, key=shown):
-        for item in _file_findings(path, *parsed[path], root):
+        for item in _file_findings(
+            path, *parsed[path], root, max_function_lines=max_function_lines
+        ):
             if _KIND_TO_CHECK[item[0]] in active:
                 findings.append(item)
 
