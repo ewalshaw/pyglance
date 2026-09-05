@@ -55,6 +55,42 @@ def test_long_async_function(tmp_path: Path) -> None:
     assert findings == ["LONG_FUNCTION a.py:1 - function 'f' is 51 lines long"]
 
 
+def test_max_function_lines_allows_longer(tmp_path: Path) -> None:
+    body = "def f():\n" + "    x = 1\n" * 50
+    (tmp_path / "a.py").write_text(body, encoding="utf-8")
+    assert analyze(tmp_path, max_function_lines=100) == []
+
+
+def test_max_function_lines_stricter(tmp_path: Path) -> None:
+    body = "def f():\n" + "    x = 1\n" * 10
+    (tmp_path / "a.py").write_text(body, encoding="utf-8")
+    findings = analyze(tmp_path, max_function_lines=10)
+    assert findings == ["LONG_FUNCTION a.py:1 - function 'f' is 11 lines long"]
+
+
+def test_max_function_lines_cli(tmp_path: Path, monkeypatch, capsys) -> None:
+    body = "def f():\n" + "    x = 1\n" * 50
+    (tmp_path / "a.py").write_text(body, encoding="utf-8")
+    monkeypatch.setattr(
+        sys, "argv", ["pyglance", "--max-function-lines", "100", str(tmp_path)]
+    )
+    assert main() == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_max_function_lines_rejects_non_positive(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        sys, "argv", ["pyglance", "--max-function-lines", "0", str(tmp_path)]
+    )
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    assert "positive integer" in capsys.readouterr().err
+
+
 def test_todo_comment(tmp_path: Path) -> None:
     (tmp_path / "a.py").write_text("# TODO: refactor validation\nx = 1\n", encoding="utf-8")
     findings = analyze(tmp_path)

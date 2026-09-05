@@ -8,7 +8,8 @@ both TODO and FIXME comments.
 
 Unused imports are names bound by `import` / `from ... import` that never
 appear as a loaded `ast.Name`. Function length is `end_lineno - lineno + 1`,
-including blank lines and comments inside the function.
+including blank lines and comments inside the function. Functions longer than
+`--max-function-lines` (default 50) are reported.
 
 ## TODO comments
 
