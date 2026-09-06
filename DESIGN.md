@@ -1,8 +1,15 @@
 # Design
 
 pyglance walks `.py` files, parses each with the stdlib `ast` module, and
-runs five checks. CLI `--select` / `--ignore` narrow that set; `TODO` covers
-both TODO and FIXME comments.
+runs five checks. CLI `--select` / `--ignore` can be used to add or remove checks. `TODO` covers both TODO and FIXME comments.
+
+Settings can also be configured in `[tool.pyglance]` in the nearest `pyproject.toml`
+at or above the analysis target. The default precedence prioritizes CLI, then pyproject, before the defaults.
+
+Known keys: `max-function-lines`, `select`, `ignore`, `exclude`,
+`announce-select-ignore`. Unknown keys are errors. 
+
+If `select` and/or `ignore` are provided in the config, they are printed before findings to avoid confusion about why certain checks might not be present. This behaviour can be overriden by setting `announce-select-ignore` to be false in the config.
 
 ## Unused imports and long functions
 
@@ -41,4 +48,6 @@ Tarjan) would scale better on a dense import graph.
 ## Paths
 
 Reported paths are relative to the path you passed in, not the current
-working directory.
+working directory. Built-in skip dirs (venvs, caches, build output) always
+apply; `exclude` globs are matched with `fnmatch` against the path relative
+to the analysis root.

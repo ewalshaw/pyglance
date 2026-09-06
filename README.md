@@ -64,18 +64,31 @@ Findings are written to standard output in a deterministic order. The process
 exits with status 1 if anything was reported. Pass `--exit-zero` to always exit 0.
 
 Limit which checks run with `--select` / `--ignore` (comma-separated ids).
-`--ignore` is applied after `--select`. Example:
+`--ignore` is applied after `--select`. Skip path globs with `--exclude`.
+Set the long-function threshold with `--max-function-lines N` (default: 50).
 
 ```text
 pyglance --select UNUSED_IMPORT,DEAD_CODE
 pyglance --ignore TODO,LONG_FUNCTION
-```
-
-Set the long-function threshold with `--max-function-lines N` (default: 50):
-
-```text
 pyglance --max-function-lines 100
+pyglance --exclude "generated/**,vendor/**"
 ```
+
+Project defaults live in `pyproject.toml`. CLI flags override config; config
+overrides built-in defaults.
+
+```toml
+[tool.pyglance]
+max-function-lines = 80
+select = ["UNUSED_IMPORT", "DEAD_CODE"]
+ignore = ["TODO"]
+exclude = ["generated/**", "vendor/**"]
+announce-select-ignore = true
+```
+
+When `select` / `ignore` come from the config file, pyglance prints them before
+findings (`select: …` / `ignore: …`). Categories overridden on the CLI are
+omitted. Set `announce-select-ignore = false` to silence this.
 
 A file with a syntax error is skipped (the message goes to stderr) and the
 rest of the tree is still checked.

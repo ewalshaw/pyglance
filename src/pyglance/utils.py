@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+from fnmatch import fnmatch
 from pathlib import Path
 
 _SKIP_DIRS = frozenset({
@@ -23,11 +25,28 @@ def _ignored(path: Path) -> bool:
     return any(part in _SKIP_DIRS or part.endswith(".egg-info") for part in path.parts)
 
 
-def find_files(path: Path) -> list[Path]:
-    """Return Python files under path, skipping cache and env directories."""
+def _excluded(path: Path, root: Path, patterns: Sequence[str]) -> bool:
+    if not patterns:
+        return False
+    try:
+        rel = path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        rel = path.as_posix()
+    return any(fnmatch(rel, pattern) for pattern in patterns)
+
+
+def find_files(path: Path, exclude: Sequence[str] = ()) -> list[Path]:
+    """Return Python files under path, skipping cache, env, and exclude globs."""
     if path.is_file():
-        return [path] if path.suffix == ".py" else []
-    return sorted(p for p in path.rglob("*.py") if p.is_file() and not _ignored(p))
+        if path.suffix != ".py":
+            return []
+        root = path.parent
+        return [] if _ignored(path) or _excluded(path, root, exclude) else [path]
+    root = path
+    return sorted(
+        p for p in path.rglob("*.py")
+        if p.is_file() and not _ignored(p) and not _excluded(p, root, exclude)
+    )
 
 
 def display_path(path: Path, root: Path) -> str:
