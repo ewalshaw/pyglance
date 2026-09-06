@@ -3,6 +3,7 @@ import io
 import re
 import sys
 import tokenize
+from collections.abc import Sequence
 from pathlib import Path
 
 from .utils import display_path, find_files, module_name
@@ -190,13 +191,14 @@ def analyze(
     target: Path,
     checks: frozenset[str] | None = None,
     max_function_lines: int = DEFAULT_MAX_FUNCTION_LINES,
+    exclude: Sequence[str] = (),
 ) -> list[str]:
     """Return issue lines for Python files under target.
 
     checks selects which rule ids to run. None means all checks.
     """
     active = ALL_CHECKS if checks is None else checks
-    files = find_files(target)
+    files = find_files(target, exclude=exclude)
     root = target.parent if target.is_file() else target
     parsed = {}
     findings = []

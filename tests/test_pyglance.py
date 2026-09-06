@@ -375,3 +375,151 @@ def test_missing_path_exits(tmp_path: Path, monkeypatch, capsys) -> None:
         main()
     assert exc.value.code == 2
     assert "path does not exist" in capsys.readouterr().err
+
+
+def test_exclude_glob_skips_files(tmp_path: Path) -> None:
+    (tmp_path / "ok.py").write_text("import os\n", encoding="utf-8")
+    generated = tmp_path / "generated"
+    generated.mkdir()
+    (generated / "junk.py").write_text("import os\n", encoding="utf-8")
+    assert find_files(tmp_path, exclude=["generated/**"]) == [tmp_path / "ok.py"]
+    assert analyze(tmp_path, exclude=["generated/**"]) == [
+        "UNUSED_IMPORT ok.py:1 - 'os' imported but not used"
+    ]
+
+
+def test_exclude_cli(tmp_path: Path, monkeypatch, capsys) -> None:
+    (tmp_path / "ok.py").write_text("x = 1\n", encoding="utf-8")
+    generated = tmp_path / "generated"
+    generated.mkdir()
+    (generated / "junk.py").write_text("import os\n", encoding="utf-8")
+    monkeypatch.setattr(
+        sys, "argv", ["pyglance", "--exclude", "generated/**", str(tmp_path)]
+    )
+    assert main() == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_pyproject_max_function_lines(tmp_path: Path, monkeypatch, capsys) -> None:
+    body = "def f():\n" + "    x = 1\n" * 50
+    (tmp_path / "a.py").write_text(body, encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.pyglance]\nmax-function-lines = 100\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(sys, "argv", ["pyglance", str(tmp_path)])
+    assert main() == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_cli_overrides_pyproject_max_function_lines(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    body = "def f():\n" + "    x = 1\n" * 50
+    (tmp_path / "a.py").write_text(body, encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.pyglance]\nmax-function-lines = 100\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        sys, "argv", ["pyglance", "--max-function-lines", "40", str(tmp_path)]
+    )
+    assert main() == 1
+    assert "LONG_FUNCTION" in capsys.readouterr().out
+
+
+def test_pyproject_select_and_ignore(tmp_path: Path, monkeypatch, capsys) -> None:
+    (tmp_path / "a.py").write_text(
+        "import os\n# TODO: later\nx = 1\n", encoding="utf-8"
+    )
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.pyglance]\n"
+        'select = ["UNUSED_IMPORT", "TODO"]\n'
+        'ignore = ["TODO"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys, "argv", ["pyglance", str(tmp_path)])
+    assert main() == 1
+    out = capsys.readouterr().out
+    assert out.startswith("select: TODO, UNUSED_IMPORT\nignore: TODO\n")
+    assert "UNUSED_IMPORT a.py:1" in out
+    assert "TODO a.py:" not in out
+
+
+def test_announce_skips_cli_overridden_category(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    (tmp_path / "a.py").write_text("import os\nx = 1\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.pyglance]\n"
+        'select = ["UNUSED_IMPORT", "TODO"]\n'
+        'ignore = ["TODO"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["pyglance", "--select", "UNUSED_IMPORT", str(tmp_path)],
+    )
+    assert main() == 1
+    out = capsys.readouterr().out
+    assert out.startswith("ignore: TODO\n")
+    assert "select:" not in out
+
+
+def test_announce_select_ignore_can_be_disabled(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    (tmp_path / "a.py").write_text("import os\nx = 1\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.pyglance]\n"
+        'select = ["UNUSED_IMPORT"]\n'
+        "announce-select-ignore = false\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys, "argv", ["pyglance", str(tmp_path)])
+    assert main() == 1
+    out = capsys.readouterr().out
+    assert not out.startswith("select:")
+    assert "UNUSED_IMPORT a.py:1" in out
+
+
+def test_pyproject_exclude(tmp_path: Path, monkeypatch, capsys) -> None:
+    (tmp_path / "ok.py").write_text("x = 1\n", encoding="utf-8")
+    generated = tmp_path / "generated"
+    generated.mkdir()
+    (generated / "junk.py").write_text("import os\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.pyglance]\nexclude = ["generated/**"]\n', encoding="utf-8"
+    )
+    monkeypatch.setattr(sys, "argv", ["pyglance", str(tmp_path)])
+    assert main() == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_pyproject_unknown_key_exits(tmp_path: Path, monkeypatch, capsys) -> None:
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.pyglance]\nnope = true\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(sys, "argv", ["pyglance", str(tmp_path)])
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    assert "unknown key" in capsys.readouterr().err
+
+
+def test_pyproject_bad_check_id_exits(tmp_path: Path, monkeypatch, capsys) -> None:
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.pyglance]\nselect = ["NOT_A_CHECK"]\n', encoding="utf-8"
+    )
+    monkeypatch.setattr(sys, "argv", ["pyglance", str(tmp_path)])
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    assert "unknown check id" in capsys.readouterr().err
+
+
+def test_no_pyproject_uses_defaults(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "a.py").write_text("import os\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["pyglance", str(tmp_path)])
+    assert main() == 1
